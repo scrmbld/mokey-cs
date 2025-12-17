@@ -289,29 +289,80 @@ namespace Interpreter.UnitTests
         [Fact]
         void ParseLet()
         {
-            string input = "let x = 5;\nlet y = 10;\nlet foobar = 838383;";
+            string input = "let x = 5;\nlet y = 10;\nlet foobar = z;";
             Parser p = new Parser(new Lexer(input));
             Program expected = new Program();
-            expected.Statements = new List<Statement>
-            {
+            expected.Statements.Add(
                 new LetStatement(
                     new Token(TokenType.Let, "let"),
                     new Identifier(new Token(TokenType.Identifier, "x"), "x"),
                     new IntLiteral(new Token(TokenType.Int, "5"), 5)
-                  ),
+                  ));
+            expected.Statements.Add(
                 new LetStatement(
                     new Token(TokenType.Let, "let"),
                     new Identifier(new Token(TokenType.Identifier, "y"), "y"),
                     new IntLiteral(new Token(TokenType.Int, "10"), 10)
-                  ),
+                  ));
+            expected.Statements.Add(
                 new LetStatement(
                     new Token(TokenType.Let, "let"),
                     new Identifier(new Token(TokenType.Identifier, "foobar"), "foobar"),
-                    new IntLiteral(new Token(TokenType.Int, "8383"), 8383)
-                  )
-            };
+                    new Identifier(new Token(TokenType.Identifier, "z"), "z")
+                  ));
             Program result = p.ParseProgram();
             Assert.Equivalent(expected, result);
+            Assert.Empty(p.Errors());
+        }
+
+        [Fact]
+        void ParseLetErrors()
+        {
+            string input = "let x 5;";
+            Parser p = new Parser(new Lexer(input));
+            p.ParseProgram();
+            List<string> result = p.Errors();
+            List<string> expected = new List<string> {
+                "expected Assign, got Int",
+            };
+            Assert.Equivalent(expected, result);
+
+            input = "let y = 10";
+            p = new Parser(new Lexer(input));
+            p.ParseProgram();
+            result = p.Errors();
+            expected = new List<string> {
+                "expected Semicolon, got Eof",
+            };
+            Assert.Equivalent(expected, result);
+
+            input = "let 17 = 8383";
+            p = new Parser(new Lexer(input));
+            p.ParseProgram();
+            result = p.Errors();
+            expected = new List<string> {
+                "expected Identifier, got Int",
+            };
+            Assert.Equivalent(expected, result);
+        }
+
+        [Fact]
+        void ParseReturn()
+        {
+            string input = "return 4;\nreturn x;";
+            Parser p = new Parser(new Lexer(input));
+            p.ParseProgram();
+            Program expected = new Program();
+            expected.Statements = new List<Statement> {
+                new ReturnStatement(
+                    new Token(TokenType.Return, "return"),
+                    new IntLiteral(new Token(TokenType.Int, "4"), 4)
+                ),
+                new ReturnStatement(
+                    new Token(TokenType.Return, "return"),
+                    new Identifier(new Token(TokenType.Identifier, "x"), "x")
+                )
+            };
         }
     }
 }

@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace Interpreter
 {
     public interface Node
@@ -23,12 +25,27 @@ namespace Interpreter
                 return "";
             }
         }
+
+        public override string ToString()
+        {
+            StringBuilder sb = new StringBuilder("(block");
+            foreach (Statement stmt in Statements)
+            {
+                sb.Append("\n  ");
+                StringBuilder field = new StringBuilder(stmt.ToString());
+                field.Replace("\n", "\n  ");
+                sb.Append(field);
+            }
+
+            sb.Append(")");
+            return sb.ToString();
+        }
     }
 
     public class Identifier : Expression
     {
-        Token Tok;
-        string Value;
+        public Token Tok;
+        public string Value;
 
         public Identifier(Token token, string value)
         {
@@ -40,12 +57,17 @@ namespace Interpreter
         {
             return Tok.Literal;
         }
+
+        public override string ToString()
+        {
+            return $"(identifier ({Value}))";
+        }
     }
 
     public class IntLiteral : Expression
     {
-        Token Tok;
-        int Value;
+        public Token Tok;
+        public int Value;
         public IntLiteral(Token token, int value)
         {
             Tok = token;
@@ -56,13 +78,18 @@ namespace Interpreter
         {
             return Tok.Literal;
         }
+
+        public override string ToString()
+        {
+            return $"(int ({Value}))";
+        }
     }
 
     public class LetStatement : Statement
     {
-        Token Tok;
-        Identifier Name;
-        Expression Value;
+        public Token Tok;
+        public Identifier Name;
+        public Expression Value;
 
         public LetStatement(Token token, Identifier name, Expression value)
         {
@@ -75,6 +102,61 @@ namespace Interpreter
         {
             return Tok.Literal;
         }
+
+        public override string ToString()
+        {
+            StringBuilder sb = new StringBuilder("(let\n");
+            sb.Append("  Right: ");
+            sb.AppendLine(Name.ToString());
+            sb.Append("  Left: ");
+            sb.AppendLine(Value.ToString());
+            sb.Append(")");
+            return sb.ToString();
+        }
+    }
+
+    public class ReturnStatement : Statement
+    {
+        public Token Tok;
+        public Expression Value;
+
+        public ReturnStatement(Token t, Expression value)
+        {
+            Tok = t;
+            Value = value;
+        }
+
+        public string TokenLiteral()
+        {
+            return Tok.Literal;
+        }
+
+        public override string ToString()
+        {
+            return $"(return_statement\n  {Value})";
+        }
+    }
+
+    public class ExpressionStatement : Statement
+    {
+        public Token Tok;
+        public Expression Value;
+
+        public ExpressionStatement(Token t, Expression value)
+        {
+            Tok = t;
+            Value = value;
+        }
+
+        public string TokenLiteral()
+        {
+            return Tok.Literal;
+        }
+
+        public override string ToString()
+        {
+            return $"(expression_statement\n  {Value.ToString()})";
+        }
     }
 
     public class Parser
@@ -82,10 +164,13 @@ namespace Interpreter
         private Lexer Lex;
         private Token CurrentToken;
         private Token PeekToken;
+        private List<String> ErrorsList;
 
         public Parser(Lexer lexer)
         {
             Lex = lexer;
+
+            ErrorsList = new List<string>();
 
             NextToken();
             NextToken();
@@ -98,8 +183,149 @@ namespace Interpreter
         }
         public Program ParseProgram()
         {
-            Program p = new Program();
-            return p;
+            Program program = new Program();
+            ErrorsList = new List<string>();
+
+            while (CurrentToken.Type != TokenType.Eof)
+            {
+                Statement? stmt = ParseStatement();
+                if (stmt is { } s)
+                {
+                    program.Statements.Add(s);
+                }
+                NextToken();
+            }
+            return program;
+        }
+
+        private Statement? ParseStatement()
+        {
+            return CurrentToken.Type switch
+            {
+                TokenType.Let => ParseLetStatement(),
+                TokenType.Return => ParseReturnStatement(),
+                _ => null
+            };
+        }
+
+        private Statement? ParseLetStatement()
+        {
+            Token letToken = CurrentToken;
+
+            if (!ExpectPeek(TokenType.Identifier))
+            {
+                return null;
+            }
+
+            Identifier varName = new Identifier(CurrentToken, CurrentToken.Literal);
+
+            if (!ExpectPeek(TokenType.Assign))
+            {
+                return null;
+            }
+
+            NextToken();
+
+            Expression? exp = ParseExpression();
+
+            if (exp is { } e)
+            {
+                if (CurrentToken.Type == TokenType.Semicolon)
+                {
+                    return new LetStatement(letToken, varName, exp);
+                }
+                else
+                {
+                    PeekError(TokenType.Semicolon);
+                }
+            }
+            return null;
+        }
+
+        private Statement? ParseReturnStatement()
+        {
+            Token returnToken = CurrentToken;
+            NextToken();
+            Expression? exp = ParseExpression();
+            if (exp is { } e)
+            {
+                if (CurrentToken.Type == TokenType.Semicolon)
+                {
+                    return new ReturnStatement(returnToken, e);
+                }
+                else
+                {
+                    PeekError(TokenType.Semicolon);
+                }
+            }
+
+            return null;
+        }
+
+        // TODO: this
+        private Expression? ParseExpression()
+        {
+            Expression? result = CurrentToken.Type switch
+            {
+                TokenType.Int => ParseInt(),
+                TokenType.Identifier => ParseIdent(),
+                _ => null
+            };
+
+            if (result is null)
+            {
+                ErrorsList.Add($"Invalid Expression: {CurrentToken.Literal}");
+            }
+
+            return result;
+        }
+
+        private IntLiteral ParseInt()
+        {
+            IntLiteral result = new IntLiteral(CurrentToken, int.Parse(CurrentToken.Literal));
+            NextToken();
+            return result;
+        }
+
+        private Identifier ParseIdent()
+        {
+            Identifier result = new Identifier(CurrentToken, CurrentToken.Literal);
+            NextToken();
+            return result;
+        }
+
+        /// <summary>
+        /// Advances the parser if and only if the peek token has the given type.
+        /// </summary>
+        private bool ExpectPeek(TokenType t)
+        {
+            if (PeekToken.Type == t)
+            {
+                NextToken();
+                return true;
+            }
+            else
+            {
+                PeekError(t);
+                return false;
+            }
+        }
+
+        private void PeekError(TokenType t)
+        {
+            if (PeekToken.Type == TokenType.Eof)
+            {
+                ErrorsList.Add($"expected {t}, got Eof");
+            }
+            else
+            {
+                ErrorsList.Add($"expected {t}, got {PeekToken.Type}");
+            }
+        }
+
+        public List<string> Errors()
+        {
+            return ErrorsList;
         }
     }
 }

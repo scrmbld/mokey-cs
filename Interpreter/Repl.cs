@@ -16,6 +16,18 @@ namespace Repl
 
         }
 
+        private static void ParseLine(string line)
+        {
+            Lexer l = new Lexer(line);
+            Parser p = new Parser(l);
+            Interpreter.Program prog = p.ParseProgram();
+            foreach (string e in p.Errors())
+            {
+                Console.WriteLine(e);
+            }
+            Console.WriteLine(prog);
+        }
+
         public static void Start()
         {
             Console.Write(PROMPT);
@@ -24,7 +36,7 @@ namespace Repl
                 string? s = Console.ReadLine();
                 if (s is { } line)
                 {
-                    LexLine(line);
+                    ParseLine(line);
                 }
                 else
                 {
