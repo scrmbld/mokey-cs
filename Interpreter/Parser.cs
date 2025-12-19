@@ -2,6 +2,17 @@ using System.Text;
 
 namespace Interpreter
 {
+    public enum OperatorType
+    {
+        Lowest,
+        Equals,
+        LessGreater,
+        Sum,
+        Product,
+        Prefix,
+        Call
+    }
+
     public interface Node
     {
         public string TokenLiteral();
@@ -58,10 +69,10 @@ namespace Interpreter
             return Tok.Literal;
         }
 
-        public override string ToString()
-        {
-            return $"(identifier ({Value}))";
-        }
+        // public override string ToString()
+        // {
+        //     return $"(identifier ({Value}))";
+        // }
     }
 
     public class IntLiteral : Expression
@@ -82,6 +93,36 @@ namespace Interpreter
         public override string ToString()
         {
             return $"(int ({Value}))";
+        }
+    }
+
+    public class PrefixOperator : Expression
+    {
+        public Token Tok;
+        public string Operator;
+        public Expression Value;
+
+        public PrefixOperator(Token token, string op, Expression value)
+        {
+            Tok = token;
+            Operator = op;
+            Value = value;
+        }
+
+        public string TokenLiteral()
+        {
+            return Tok.Literal;
+        }
+
+        public override string ToString()
+        {
+            StringBuilder sb = new StringBuilder($"(unary_{Operator}\n");
+            StringBuilder valString = new StringBuilder(Value.ToString());
+            valString.Replace("\n", "\n  ");
+            sb.Append(valString);
+            sb.Append(")");
+
+            return sb.ToString();
         }
     }
 
@@ -153,14 +194,26 @@ namespace Interpreter
             return Tok.Literal;
         }
 
-        public override string ToString()
-        {
-            return $"(expression_statement\n  {Value.ToString()})";
-        }
+        // public override string ToString()
+        // {
+        //     return $"(expression_statement\n  {Value.ToString()})";
+        // }
     }
 
     public class Parser
     {
+        private Dictionary<TokenType, Func<Expression?>> PrefixTable;
+        private Dictionary<TokenType, Func<Expression, Expression?>> InfixTable;
+        private List<OperatorType> OperatorPrecedence = new List<OperatorType> {
+            OperatorType.Lowest,
+            OperatorType.Equals,
+            OperatorType.LessGreater,
+            OperatorType.Sum,
+            OperatorType.Product,
+            OperatorType.Prefix,
+            OperatorType.Call
+        };
+
         private Lexer Lex;
         private Token CurrentToken;
         private Token PeekToken;
@@ -174,6 +227,11 @@ namespace Interpreter
 
             NextToken();
             NextToken();
+
+            PrefixTable = new Dictionary<TokenType, Func<Expression?>>();
+            PrefixTable.Add(TokenType.Identifier, ParseIdent);
+            PrefixTable.Add(TokenType.Int, ParseInt);
+            InfixTable = new Dictionary<TokenType, Func<Expression, Expression?>>();
         }
 
         private void NextToken()
@@ -204,7 +262,7 @@ namespace Interpreter
             {
                 TokenType.Let => ParseLetStatement(),
                 TokenType.Return => ParseReturnStatement(),
-                _ => null
+                _ => ParseExpressionStatement()
             };
         }
 
@@ -262,22 +320,37 @@ namespace Interpreter
             return null;
         }
 
+        private Statement? ParseExpressionStatement()
+        {
+            Token expressionToken = CurrentToken;
+            Expression? exp = ParseExpression();
+            if (exp is { } e)
+            {
+                // semicolons are optional for expression statements
+                if (CurrentToken.Type == TokenType.Semicolon)
+                {
+                    NextToken();
+                }
+
+                return new ExpressionStatement(expressionToken, e);
+            }
+
+            return null;
+        }
+
         // TODO: this
         private Expression? ParseExpression()
         {
-            Expression? result = CurrentToken.Type switch
+            try
             {
-                TokenType.Int => ParseInt(),
-                TokenType.Identifier => ParseIdent(),
-                _ => null
-            };
-
-            if (result is null)
-            {
-                ErrorsList.Add($"Invalid Expression: {CurrentToken.Literal}");
+                Func<Expression?> prefix = PrefixTable[CurrentToken.Type];
+                Expression? left_exp = prefix();
+                return left_exp;
             }
-
-            return result;
+            catch (KeyNotFoundException)
+            {
+                return null;
+            }
         }
 
         private IntLiteral ParseInt()
@@ -292,6 +365,36 @@ namespace Interpreter
             Identifier result = new Identifier(CurrentToken, CurrentToken.Literal);
             NextToken();
             return result;
+        }
+
+        private PrefixOperator? ParsePrefixOp()
+        {
+            Token opToken = CurrentToken;
+            string? opType = CurrentToken.Type switch
+            {
+                TokenType.Minus => "-",
+                TokenType.Not => "!",
+                _ => null
+            };
+            if (opType is { } op)
+            {
+                NextToken();
+                Expression? rhs = ParseExpression();
+                if (rhs is { } r)
+                {
+                    return new PrefixOperator(opToken, opType, r);
+                }
+                else
+                {
+                    ErrorsList.Add($"Invalid expression at {CurrentToken.Literal}");
+                }
+            }
+            else
+            {
+                ErrorsList.Add($"Expected unary operator, found {CurrentToken.Type}");
+            }
+
+            return null;
         }
 
         /// <summary>

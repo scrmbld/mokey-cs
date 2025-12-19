@@ -36,7 +36,7 @@ namespace Repl
                 string? s = Console.ReadLine();
                 if (s is { } line)
                 {
-                    ParseLine(line);
+                    LexLine(line);
                 }
                 else
                 {
