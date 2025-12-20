@@ -50,7 +50,7 @@ namespace Interpreter.UnitTests
         {
             Lexer l = new Lexer("!");
             Token result = l.NextToken();
-            Assert.Equivalent(new Token(TokenType.Not, "!"), result);
+            Assert.Equivalent(new Token(TokenType.Exclam, "!"), result);
         }
 
         [Fact]
@@ -74,7 +74,7 @@ namespace Interpreter.UnitTests
         {
             Lexer l = new Lexer("*");
             Token result = l.NextToken();
-            Assert.Equivalent(new Token(TokenType.Times, "*"), result);
+            Assert.Equivalent(new Token(TokenType.Asterisk, "*"), result);
         }
 
         [Fact]
@@ -82,7 +82,7 @@ namespace Interpreter.UnitTests
         {
             Lexer l = new Lexer("/");
             Token result = l.NextToken();
-            Assert.Equivalent(new Token(TokenType.Divide, "/"), result);
+            Assert.Equivalent(new Token(TokenType.Slash, "/"), result);
         }
 
     }
@@ -415,9 +415,9 @@ namespace Interpreter.UnitTests
             Program expected = new Program();
             expected.Statements = new List<Statement> {
               new ExpressionStatement(
-                  new Token(TokenType.Not, "!"),
+                  new Token(TokenType.Exclam, "!"),
                   new PrefixOperator(
-                      new Token(TokenType.Not, "!"),
+                      new Token(TokenType.Exclam, "!"),
                       "!",
                       new Identifier(
                           new Token(TokenType.Identifier, "x"),
@@ -436,9 +436,9 @@ namespace Interpreter.UnitTests
             expected = new Program();
             expected.Statements = new List<Statement> {
               new ExpressionStatement(
-                  new Token(TokenType.Not, "!"),
+                  new Token(TokenType.Exclam, "!"),
                   new PrefixOperator(
-                      new Token(TokenType.Not, "!"),
+                      new Token(TokenType.Exclam, "!"),
                       "!",
                       new Identifier(
                           new Token(TokenType.Identifier, "x"),
@@ -448,6 +448,206 @@ namespace Interpreter.UnitTests
                   )
             };
 
+            Assert.Equivalent(expected, result);
+            Assert.Empty(p.Errors());
+        }
+
+        [Fact]
+        void ParseInfix()
+        {
+            string input = "x + 2";
+            Parser p = new Parser(new Lexer(input));
+            Program result = p.ParseProgram();
+            Program expected = new Program();
+            expected.Statements = new List<Statement> {
+            new ExpressionStatement(
+                new Token(TokenType.Identifier, "x"),
+                new InfixOperator(
+                    new Token(TokenType.Plus, "+"),
+                    "+",
+                    new Identifier(
+                        new Token(TokenType.Identifier, "x"),
+                        "x"
+                        ),
+                    new IntLiteral(
+                        new Token(TokenType.Int, "2"),
+                        2
+                        )
+                    )
+                )
+            };
+            Assert.Equivalent(expected, result);
+            Assert.Empty(p.Errors());
+
+            input = "7 - y";
+            p = new Parser(new Lexer(input));
+            result = p.ParseProgram();
+            expected = new Program();
+            expected.Statements = new List<Statement> {
+            new ExpressionStatement(
+                new Token(TokenType.Int, "7"),
+                new InfixOperator(
+                    new Token(TokenType.Minus, "-"),
+                    "-",
+                    new IntLiteral(
+                        new Token(TokenType.Int, "7"),
+                        7
+                        ),
+                    new Identifier(
+                        new Token(TokenType.Identifier, "y"),
+                        "y"
+                        )
+                    )
+                )
+            };
+            Assert.Equivalent(expected, result);
+            Assert.Empty(p.Errors());
+
+            input = "7 * y";
+            p = new Parser(new Lexer(input));
+            result = p.ParseProgram();
+            expected = new Program();
+            expected.Statements = new List<Statement> {
+            new ExpressionStatement(
+                new Token(TokenType.Int, "7"),
+                new InfixOperator(
+                    new Token(TokenType.Asterisk, "*"),
+                    "*",
+                    new IntLiteral(
+                        new Token(TokenType.Int, "7"),
+                        7
+                        ),
+                    new Identifier(
+                        new Token(TokenType.Identifier, "y"),
+                        "y"
+                        )
+                    )
+                )
+            };
+            Assert.Equivalent(expected, result);
+            Assert.Empty(p.Errors());
+
+            input = "-7 / y";
+            p = new Parser(new Lexer(input));
+            result = p.ParseProgram();
+            expected = new Program();
+            expected.Statements = new List<Statement> {
+            new ExpressionStatement(
+                new Token(TokenType.Minus, "-"),
+                new InfixOperator(
+                    new Token(TokenType.Slash, "/"),
+                    "/",
+                    new PrefixOperator(
+                        new Token(TokenType.Minus, "-"),
+                        "-",
+                        new IntLiteral(
+                            new Token(TokenType.Int, "7"),
+                            7
+                            )
+                    ),
+                    new Identifier(
+                        new Token(TokenType.Identifier, "y"),
+                        "y"
+                        )
+                    )
+                )
+            };
+            Assert.Equivalent(expected, result);
+            Assert.Empty(p.Errors());
+
+            input = "7 == y";
+            p = new Parser(new Lexer(input));
+            result = p.ParseProgram();
+            expected = new Program();
+            expected.Statements = new List<Statement> {
+            new ExpressionStatement(
+                new Token(TokenType.Int, "7"),
+                new InfixOperator(
+                    new Token(TokenType.Equal, "=="),
+                    "==",
+                    new IntLiteral(
+                        new Token(TokenType.Int, "7"),
+                        7
+                        ),
+                    new Identifier(
+                        new Token(TokenType.Identifier, "y"),
+                        "y"
+                        )
+                    )
+                )
+            };
+            Assert.Equivalent(expected, result);
+            Assert.Empty(p.Errors());
+
+            input = "7 != y";
+            p = new Parser(new Lexer(input));
+            result = p.ParseProgram();
+            expected = new Program();
+            expected.Statements = new List<Statement> {
+            new ExpressionStatement(
+                new Token(TokenType.Int, "7"),
+                new InfixOperator(
+                    new Token(TokenType.NotEqual, "!="),
+                    "!=",
+                    new IntLiteral(
+                        new Token(TokenType.Int, "7"),
+                        7
+                        ),
+                    new Identifier(
+                        new Token(TokenType.Identifier, "y"),
+                        "y"
+                        )
+                    )
+                )
+            };
+            Assert.Equivalent(expected, result);
+            Assert.Empty(p.Errors());
+
+            input = "7 < y";
+            p = new Parser(new Lexer(input));
+            result = p.ParseProgram();
+            expected = new Program();
+            expected.Statements = new List<Statement> {
+            new ExpressionStatement(
+                new Token(TokenType.Int, "7"),
+                new InfixOperator(
+                    new Token(TokenType.Less, "<"),
+                    "<",
+                    new IntLiteral(
+                        new Token(TokenType.Int, "7"),
+                        7
+                        ),
+                    new Identifier(
+                        new Token(TokenType.Identifier, "y"),
+                        "y"
+                        )
+                    )
+                )
+            };
+            Assert.Equivalent(expected, result);
+            Assert.Empty(p.Errors());
+
+            input = "7 > y";
+            p = new Parser(new Lexer(input));
+            result = p.ParseProgram();
+            expected = new Program();
+            expected.Statements = new List<Statement> {
+            new ExpressionStatement(
+                new Token(TokenType.Int, "7"),
+                new InfixOperator(
+                    new Token(TokenType.Greater, ">"),
+                    ">",
+                    new IntLiteral(
+                        new Token(TokenType.Int, "7"),
+                        7
+                        ),
+                    new Identifier(
+                        new Token(TokenType.Identifier, "y"),
+                        "y"
+                        )
+                    )
+                )
+            };
             Assert.Equivalent(expected, result);
             Assert.Empty(p.Errors());
         }

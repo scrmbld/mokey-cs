@@ -12,14 +12,14 @@
         // operators
         Assign,
         Equal,
-        Not,
+        Exclam,
         NotEqual,
         Less,
         Greater,
         Plus,
         Minus,
-        Times,
-        Divide,
+        Asterisk,
+        Slash,
 
         // delimiters
         Comma,
@@ -128,6 +128,15 @@
             }
         }
 
+        private Token CreateAndJumpOver(Token tok, int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                ReadChar();
+            }
+            return tok;
+        }
+
         public Token NextToken()
         {
             ConsumeWhitespace();
@@ -136,20 +145,20 @@
             {
                 '=' => PeekChar() switch
                 {
-                    '=' => new Token(TokenType.Equal, "=="),
+                    '=' => CreateAndJumpOver(new Token(TokenType.Equal, "=="), 1),
                     _ => new Token(TokenType.Assign, ch.ToString())
                 },
                 '<' => new Token(TokenType.Less, ch.ToString()),
                 '>' => new Token(TokenType.Greater, ch.ToString()),
                 '!' => PeekChar() switch
                 {
-                    '=' => new Token(TokenType.NotEqual, "!="),
-                    _ => new Token(TokenType.Not, ch.ToString())
+                    '=' => CreateAndJumpOver(new Token(TokenType.NotEqual, "!="), 1),
+                    _ => new Token(TokenType.Exclam, ch.ToString())
                 },
                 '+' => new Token(TokenType.Plus, ch.ToString()),
                 '-' => new Token(TokenType.Minus, ch.ToString()),
-                '*' => new Token(TokenType.Times, ch.ToString()),
-                '/' => new Token(TokenType.Divide, ch.ToString()),
+                '*' => new Token(TokenType.Asterisk, ch.ToString()),
+                '/' => new Token(TokenType.Slash, ch.ToString()),
                 ';' => new Token(TokenType.Semicolon, ch.ToString()),
                 '(' => new Token(TokenType.LParen, ch.ToString()),
                 ')' => new Token(TokenType.RParen, ch.ToString()),

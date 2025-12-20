@@ -2,20 +2,20 @@ using System.Text;
 
 namespace Interpreter
 {
-    public enum OperatorType
-    {
-        Lowest,
-        Equals,
-        LessGreater,
-        Sum,
-        Product,
-        Prefix,
-        Call
-    }
-
     public interface Node
     {
         public string TokenLiteral();
+    }
+
+    static public class Precedences
+    {
+        public static int LOWEST = 0;
+        public static int EQUALS = 1;
+        public static int LESSGREATER = 2;
+        public static int SUM = 3;
+        public static int PRODUCT = 4;
+        public static int PREFIX = 5;
+        public static int CALL = 6;
     }
 
     public interface Statement : Node { }
@@ -116,12 +116,47 @@ namespace Interpreter
 
         public override string ToString()
         {
-            StringBuilder sb = new StringBuilder($"(unary_operator\n({Operator})\n");
+            StringBuilder sb = new StringBuilder($"(unary_operator\n  ({Operator})\n  ");
             StringBuilder valString = new StringBuilder(Value.ToString());
             valString.Replace("\n", "\n  ");
             sb.Append(valString);
             sb.Append(")");
 
+            return sb.ToString();
+        }
+    }
+
+    public class InfixOperator : Expression
+    {
+        public Token Tok;
+        public string Operator;
+        public Expression Lhs;
+        public Expression Rhs;
+
+        public InfixOperator(Token token, string op, Expression lhs, Expression rhs)
+        {
+            Tok = token;
+            Operator = op;
+            Lhs = lhs;
+            Rhs = rhs;
+        }
+
+        public string TokenLiteral()
+        {
+            return Tok.Literal;
+        }
+
+        public override string ToString()
+        {
+            StringBuilder sb = new StringBuilder($"(binary_operator\n  ({Operator})\n  ");
+            StringBuilder lhsString = new StringBuilder(Lhs.ToString());
+            lhsString.Replace("\n", "\n  ");
+            StringBuilder rhsString = new StringBuilder(Rhs.ToString());
+            rhsString.Replace("\n", "\n  ");
+            sb.Append(lhsString.ToString());
+            sb.Append("\n  ");
+            sb.Append(rhsString.ToString());
+            sb.Append(")");
             return sb.ToString();
         }
     }
@@ -208,14 +243,15 @@ namespace Interpreter
     {
         private Dictionary<TokenType, Func<Expression?>> PrefixTable;
         private Dictionary<TokenType, Func<Expression, Expression?>> InfixTable;
-        private List<OperatorType> OperatorPrecedence = new List<OperatorType> {
-            OperatorType.Lowest,
-            OperatorType.Equals,
-            OperatorType.LessGreater,
-            OperatorType.Sum,
-            OperatorType.Product,
-            OperatorType.Prefix,
-            OperatorType.Call
+        private Dictionary<TokenType, int> OperatorPrecedence = new Dictionary<TokenType, int> {
+            {TokenType.Equal, 1},
+            {TokenType.NotEqual, 1},
+            {TokenType.Less, 2},
+            {TokenType.Greater, 2},
+            {TokenType.Plus, 3},
+            {TokenType.Minus, 3},
+            {TokenType.Asterisk, 4},
+            {TokenType.Slash, 4}
         };
 
         private Lexer Lex;
@@ -235,9 +271,17 @@ namespace Interpreter
             PrefixTable = new Dictionary<TokenType, Func<Expression?>>();
             PrefixTable.Add(TokenType.Identifier, ParseIdent);
             PrefixTable.Add(TokenType.Int, ParseInt);
-            PrefixTable.Add(TokenType.Not, ParsePrefixOp);
+            PrefixTable.Add(TokenType.Exclam, ParsePrefixOp);
             PrefixTable.Add(TokenType.Minus, ParsePrefixOp);
             InfixTable = new Dictionary<TokenType, Func<Expression, Expression?>>();
+            InfixTable.Add(TokenType.Minus, ParseInfixOp);
+            InfixTable.Add(TokenType.Plus, ParseInfixOp);
+            InfixTable.Add(TokenType.Asterisk, ParseInfixOp);
+            InfixTable.Add(TokenType.Slash, ParseInfixOp);
+            InfixTable.Add(TokenType.Equal, ParseInfixOp);
+            InfixTable.Add(TokenType.NotEqual, ParseInfixOp);
+            InfixTable.Add(TokenType.Less, ParseInfixOp);
+            InfixTable.Add(TokenType.Greater, ParseInfixOp);
         }
 
         private void NextToken()
@@ -290,7 +334,7 @@ namespace Interpreter
 
             NextToken();
 
-            Expression? exp = ParseExpression();
+            Expression? exp = ParseExpression(Precedences.LOWEST);
 
             if (exp is { } e)
             {
@@ -310,7 +354,7 @@ namespace Interpreter
         {
             Token returnToken = CurrentToken;
             NextToken();
-            Expression? exp = ParseExpression();
+            Expression? exp = ParseExpression(Precedences.LOWEST);
             if (exp is { } e)
             {
                 if (CurrentToken.Type == TokenType.Semicolon)
@@ -329,7 +373,7 @@ namespace Interpreter
         private Statement? ParseExpressionStatement()
         {
             Token expressionToken = CurrentToken;
-            Expression? exp = ParseExpression();
+            Expression? exp = ParseExpression(Precedences.LOWEST);
             if (exp is { } e)
             {
                 // semicolons are optional for expression statements
@@ -344,17 +388,40 @@ namespace Interpreter
             return null;
         }
 
-        // TODO: this
-        private Expression? ParseExpression()
+        private Expression? ParseExpression(int precedence)
         {
             try
             {
                 Func<Expression?> prefix = PrefixTable[CurrentToken.Type];
-                Expression? left_exp = prefix();
-                return left_exp;
+                Expression? leftExp = prefix();
+                if (leftExp == null)
+                {
+                    ErrorsList.Add($"Invalid expression {CurrentToken.Literal}...");
+                    return null;
+                }
+
+                while (PeekToken.Type != TokenType.Semicolon && precedence < CurrentPrecedence())
+                {
+                    try
+                    {
+                        Func<Expression, Expression?> infix = InfixTable[CurrentToken.Type];
+
+                        if (leftExp is { } lhs)
+                        {
+                            leftExp = infix(lhs);
+                        }
+                    }
+                    catch (KeyNotFoundException)
+                    {
+                        return leftExp;
+                    }
+                }
+
+                return leftExp;
             }
             catch (KeyNotFoundException)
             {
+                ErrorsList.Add($"{CurrentToken.Literal} is not prefix/left side value for expression");
                 return null;
             }
         }
@@ -376,22 +443,58 @@ namespace Interpreter
         private PrefixOperator? ParsePrefixOp()
         {
             Token opToken = CurrentToken;
-            string? opType = CurrentToken.Type switch
+            string opType = CurrentToken.Literal;
+
+            NextToken();
+            Expression? rhs = ParseExpression(Precedences.PREFIX);
+
+            if (rhs is { } r)
             {
-                TokenType.Minus => "-",
-                TokenType.Not => "!",
-                _ => null
-            };
-            if (opType is { } op)
-            {
-                NextToken();
-                Expression? rhs = ParseExpression();
-                if (rhs is { } r)
-                {
-                    return new PrefixOperator(opToken, opType, r);
-                }
+                return new PrefixOperator(opToken, opType, r);
             }
+
             return null;
+        }
+
+        private InfixOperator? ParseInfixOp(Expression lhs)
+        {
+            Token opToken = CurrentToken;
+            string opType = CurrentToken.Literal;
+
+            int precedence = CurrentPrecedence();
+            NextToken();
+            Expression? rhs = ParseExpression(precedence);
+
+            if (rhs is { } r)
+            {
+                return new InfixOperator(opToken, opType, lhs, rhs);
+            }
+
+            return null;
+        }
+
+        private int PeekPrecedence()
+        {
+            try
+            {
+                return OperatorPrecedence[PeekToken.Type];
+            }
+            catch (KeyNotFoundException)
+            {
+                return 0;
+            }
+        }
+
+        private int CurrentPrecedence()
+        {
+            try
+            {
+                return OperatorPrecedence[CurrentToken.Type];
+            }
+            catch (KeyNotFoundException)
+            {
+                return 0;
+            }
         }
 
         /// <summary>
