@@ -69,10 +69,10 @@ namespace Interpreter
             return Tok.Literal;
         }
 
-        // public override string ToString()
-        // {
-        //     return $"(identifier ({Value}))";
-        // }
+        public override string ToString()
+        {
+            return $"(identifier ({Value}))";
+        }
     }
 
     public class IntLiteral : Expression
@@ -116,7 +116,7 @@ namespace Interpreter
 
         public override string ToString()
         {
-            StringBuilder sb = new StringBuilder($"(unary_{Operator}\n");
+            StringBuilder sb = new StringBuilder($"(unary_operator\n({Operator})\n");
             StringBuilder valString = new StringBuilder(Value.ToString());
             valString.Replace("\n", "\n  ");
             sb.Append(valString);
@@ -194,10 +194,14 @@ namespace Interpreter
             return Tok.Literal;
         }
 
-        // public override string ToString()
-        // {
-        //     return $"(expression_statement\n  {Value.ToString()})";
-        // }
+        public override string ToString()
+        {
+            StringBuilder sb = new StringBuilder($"(expression_statement\n");
+            StringBuilder valSb = new StringBuilder(Value.ToString());
+            valSb.Replace("\n", "\n  ");
+            sb.Append($"{valSb})");
+            return sb.ToString();
+        }
     }
 
     public class Parser
@@ -231,6 +235,8 @@ namespace Interpreter
             PrefixTable = new Dictionary<TokenType, Func<Expression?>>();
             PrefixTable.Add(TokenType.Identifier, ParseIdent);
             PrefixTable.Add(TokenType.Int, ParseInt);
+            PrefixTable.Add(TokenType.Not, ParsePrefixOp);
+            PrefixTable.Add(TokenType.Minus, ParsePrefixOp);
             InfixTable = new Dictionary<TokenType, Func<Expression, Expression?>>();
         }
 
@@ -384,16 +390,7 @@ namespace Interpreter
                 {
                     return new PrefixOperator(opToken, opType, r);
                 }
-                else
-                {
-                    ErrorsList.Add($"Invalid expression at {CurrentToken.Literal}");
-                }
             }
-            else
-            {
-                ErrorsList.Add($"Expected unary operator, found {CurrentToken.Type}");
-            }
-
             return null;
         }
 

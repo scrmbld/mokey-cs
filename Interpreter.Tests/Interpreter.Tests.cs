@@ -405,5 +405,51 @@ namespace Interpreter.UnitTests
             Assert.Equivalent(expected, result);
             Assert.Empty(p.Errors());
         }
+
+        [Fact]
+        void ParsePrefix()
+        {
+            string input = "!x";
+            Parser p = new Parser(new Lexer(input));
+            Program result = p.ParseProgram();
+            Program expected = new Program();
+            expected.Statements = new List<Statement> {
+              new ExpressionStatement(
+                  new Token(TokenType.Not, "!"),
+                  new PrefixOperator(
+                      new Token(TokenType.Not, "!"),
+                      "!",
+                      new Identifier(
+                          new Token(TokenType.Identifier, "x"),
+                          "x"
+                          )
+                      )
+                  )
+            };
+
+            Assert.Equivalent(expected, result);
+            Assert.Empty(p.Errors());
+
+            input = "!x";
+            p = new Parser(new Lexer(input));
+            result = p.ParseProgram();
+            expected = new Program();
+            expected.Statements = new List<Statement> {
+              new ExpressionStatement(
+                  new Token(TokenType.Not, "!"),
+                  new PrefixOperator(
+                      new Token(TokenType.Not, "!"),
+                      "!",
+                      new Identifier(
+                          new Token(TokenType.Identifier, "x"),
+                          "x"
+                          )
+                      )
+                  )
+            };
+
+            Assert.Equivalent(expected, result);
+            Assert.Empty(p.Errors());
+        }
     }
 }
